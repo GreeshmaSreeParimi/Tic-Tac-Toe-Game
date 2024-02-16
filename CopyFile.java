@@ -1,0 +1,524 @@
+import com.jcraft.jsch.*;
+import java.util.Scanner;
+import java.io.Console;
+import java.io.FileOutputStream;
+import java.io.PrintWriter;
+
+import java.awt.GridLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
+
+/**
+ *
+ * @author Greeshma Sree Parimi
+ */
+public class OnlineTicTacToe implements ActionListener {
+
+    private final int INTERVAL = 1000;         // 1 second
+    private final int NBUTTONS = 9;            // #bottons
+    private ObjectInputStream input = null;    // input from my counterpart
+    private ObjectOutputStream output = null;  // output from my counterpart
+    private JFrame window = null;              // the tic-tac-toe window
+    private JButton[] button = new JButton[NBUTTONS]; // button[0] - button[9]
+    private boolean[] myTurn = new boolean[1]; // T: my turn, F: your turn
+    private String myMark = null;              // "O" or "X"
+    private String yourMark = null;            // "X" or "O"
+
+    /**
+     * Prints out the usage.
+     */
+    private static void usage( ) {
+        System.err.
+	    println( "Usage: java OnlineTicTacToe ipAddr ipPort(>=5000) [auto]" );
+        System.exit( -1 );
+    }
+
+    /**
+     * Prints out the track trace upon a given error and quits the application.
+     * @param an exception 
+     */
+    private static void error( Exception e ) {
+        e.printStackTrace();
+        System.exit(-1);
+    }
+
+    /**
+     * Starts the online tic-tac-toe game.
+     * @param args[0]: my counterpart's ip address, args[1]: his/her port, (arg[2]: "auto")
+     *        if args.length == 0, this Java program is remotely launched by JSCH.
+     */
+    public static void main( String[] args ) {
+
+	if ( args.length == 0 ) {
+	    // if no arguments, this process was launched through JSCH
+	    try {
+		OnlineTicTacToe game = new OnlineTicTacToe( );
+	    } catch( IOException e ) {
+		error( e );
+	    }
+	}
+	else {
+	    // this process wa launched from the user console.
+
+	    // verify the number of arguments
+	    if ( args.length != 2 && args.length != 3 ) {
+		System.err.println( "args.length = " + args.length );
+		usage( );
+	    }
+
+	    // verify the correctness of my counterpart address
+	    InetAddress addr = null;
+	    try {
+		if(args[0].equals("localhost")){
+			addr = InetAddress.getLocalHost();
+		    }else{
+
+		addr = InetAddress.getByName( args[0] );
+		    }
+	    } catch ( UnknownHostException e ) {
+		error( e );
+	    }
+	    
+	    // verify the correctness of my counterpart port
+	    int port = 0;
+	    try {
+		port = Integer.parseInt( args[1] );
+	    } catch (NumberFormatException e) {
+		error( e );
+	    }
+	    if ( port < 5000 ) {
+		usage( );
+	    }
+	    
+	    // check args[2] == "auto"
+	    if ( args.length == 3 && args[2].equals( "auto" ) ) {
+		// auto play
+		OnlineTicTacToe game = new OnlineTicTacToe( args[0] );
+	    }
+	    else { 
+		// interactive play
+		OnlineTicTacToe game = new OnlineTicTacToe( addr, port );
+	    }
+	}
+    }
+
+    /**
+     * Is the constructor that is remote invoked by JSCH. It behaves as a server.
+     * The constructor uses a Connection object for communication with the client.
+     * It always assumes that the client plays first. 
+     */
+    public OnlineTicTacToe( ) throws IOException {
+	// receive an ssh2 connection from a user-local master server.
+	Connection connection = new Connection( );
+	input = connection.in;
+	output = connection.out;
+
+	// for debugging, always good to write debugging messages to the local file
+	// don't use System.out that is a connection back to the client.
+	PrintWriter logs = new PrintWriter( new FileOutputStream( "logs.txt" ) );
+	logs.println( "Autoplay: got started." );
+	logs.flush( );
+
+	myMark = "X";   // auto player is always the 2nd.
+	yourMark = "O"; 
+
+	// the main body of auto play.  
+	// IMPLEMENT BY YOURSELF
+	myTurn[0]= false;
+		   
+	while (true) {
+	    //logs.println("In while loop");
+	    try{
+                // Read button number from real user
+		if(!myTurn[0]){
+		    logs.println("inside read");
+		    logs.flush();
+		    int buttonNumber = (int)input.readObject();
+		    myTurn[0]= true;
+		    logs.println("Counterpart marked at "+buttonNumber); 
+		    logs.flush();
+		}
+	    }catch(Exception e){
+	    	logs.println("In exception");
+		logs.flush();
+	    	error(e);
+	    }
+                // Choose an unmarked button (randomly or using your own algorithm)
+	   
+            int chosenButton = (int)(Math.random()*8)+1;
+	    //try{
+                // Write the choice to the real user
+		//if(true){
+	    //   output.writeObject(chosenButton);
+	    //   output.flush();
+	    //   myTurn[0]=false;
+		    //logs.println("I marked at "+ chosenButton); 
+	    // logs.flush();
+	    //	}
+	    // }catch(Exception e){
+	    //	error(e);
+	    //}
+                // Log the button choice to logs.txt file
+                //bufferedWriter.write("Button chosen: " + chosenButton);
+                //bufferedWriter.newLine();
+                //bufferedWriter.flush();
+        }
+    }
+
+    /**
+     * Is the constructor that, upon receiving the "auto" option,
+     * launches a remote OnlineTicTacToe through JSCH. This
+     * constructor always assumes that the local user should play
+     * first. The constructor uses a Connection object for
+     * communicating with the remote process.
+     *
+     * @param my auto counter part's ip address
+     */
+    public OnlineTicTacToe( String hostname ) {
+        final int JschPort = 22;      // Jsch IP port
+
+        // Read username, password, and a remote host from keyboard
+        Scanner keyboard = new Scanner( System.in );
+        String username = null;
+        String password = null;
+	try {
+            // read the user name from the console                                                            
+            System.out.print( "User: " );
+            username = keyboard.nextLine( );
+
+            // read the password from the console                                                             
+            Console console = System.console( );
+            password = new String( console.readPassword( "Password: " ) );
+
+        } catch( Exception e ) {
+            e.printStackTrace( );
+            System.exit( -1 );
+        }
+
+	// The JSCH establishment process is pretty much the same as Lab3.
+	// IMPLEMENT BY YOURSELF
+
+        // establish an ssh2 connection to ip and run
+        // Server there.
+	String cur_dir = System.getProperty( "user.dir" );
+	String command 
+	    = "java -cp " + cur_dir + "/jsch-0.1.54.jar:" + cur_dir + 
+	      " OnlineTicTacToe";
+	System.out.println("command " + command);
+	Connection connection = new Connection( username, password,
+       					hostname, command );
+	
+        // the main body of the master server
+	input = connection.in;
+	output = connection.out;
+	//try{
+	//  while(true){
+	//		output.writeObject(1);
+		// System.out.println((int)input.readObject( ));
+	//   }
+	// connection.close();
+    //	}catch(Exception e){
+    //	error(e);
+    //	}
+
+	//set up a window
+	makeWindow( true ); // I'm a former
+
+        // start my counterpart thread
+	Counterpart counterpart = new Counterpart( );
+	counterpart.start();
+    }
+
+    /**
+     * Is the constructor that sets up a TCP connection with my counterpart,
+     * brings up a game window, and starts a slave thread for listenning to
+     * my counterpart.
+     * @param my counterpart's ip address
+     * @param my counterpart's port
+     */
+    public OnlineTicTacToe( InetAddress addr, int port ) {
+        // set up a TCP connection with my counterpart
+	// IMPLEMENT BY YOURSELF
+	System.out.println("in 2 user play");
+	ServerSocket server = null;
+        try {
+            server = new ServerSocket( port );
+            server.setSoTimeout(1000* 60);
+        } catch ( Exception e ) {
+	    System.out.println("Hi 0");
+	    if(client == null){
+		client =  new Socket(addr, port);
+		System.out.println("hi 3");
+	    }
+            error( e );
+
+        }
+
+        // While accepting a remote request, try to send my connection request
+        Socket client = null;
+	boolean isServer = false;
+        while ( true ) {
+	    System.out.println("In while loop");
+            try {
+		
+		System.out.println("hi above server accept");
+                client = server.accept();
+		System.out.println(client + " client");
+		if (client != null ){
+		    isServer = true;
+		    break;
+		}
+		
+		// makeWindow(false);
+	
+  
+            } catch ( SocketTimeoutException ste ) {
+		System.out.println("hi 1");
+                // Couldn't receive a connection request withtin INTERVAL
+            } catch ( IOException ioe ) {
+		System.out.println("hi 2");
+                error( ioe );
+            }catch(Exception e){
+		System.out.println("In catch loop");
+		if (client != null ){
+		    isServer = true;
+		    break;
+		}
+             // Connection refused
+	    }
+	    
+	    try{
+		if(client == null){
+		    client =  new Socket(addr, port);
+		    System.out.println("hi 3");
+		}
+	    }catch (IOException ioe) {
+		    
+		System.out.println("hi in client 4");
+	    }
+	    if(client == null)continue;
+	    isServer = false;
+	    break;
+            // Check if a connection was established. If so, leave the loop
+          	
+        }
+
+	
+      
+        System.out.println( "TCP connection established..." );
+
+	makeWindow(!isServer);
+        
+	// start my counterpart thread
+	try{
+
+	    output = new ObjectOutputStream(client.getOutputStream());
+	    input = new ObjectInputStream(client.getInputStream());
+	}catch(Exception e){
+	    error(e);
+	}
+        Counterpart counterpart = new Counterpart( );
+        counterpart.start();
+    }
+
+    /**
+     * Creates a 3x3 window for the tic-tac-toe game
+     * @param true if this window is created by the former, (i.e., the
+     *        person who starts first. Otherwise false.
+     */
+    private void makeWindow( boolean amFormer ) {
+        myTurn[0] = amFormer;
+	System.out.println("amFormer " + amFormer);
+        myMark = ( amFormer ) ? "O" : "X";    // 1st person uses "O"
+        yourMark = ( amFormer ) ? "X" : "O";  // 2nd person uses "X"
+	System.out.println("MY MARK " + myMark);
+        // create a window
+        window = new JFrame("OnlineTicTacToe(" +
+                ((amFormer) ? "former)" : "latter)" ) + myMark );
+        window.setSize(300, 300);
+	window.setLocation(20, 20);
+        window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        window.setLayout(new GridLayout(3, 3));
+
+	// initialize all nine cells.
+        for (int i = 0; i < NBUTTONS; i++) {
+            button[i] = new JButton();
+            window.add(button[i]);
+            button[i].addActionListener(this);
+        }
+
+	// make it visible
+        window.setVisible(true);
+    }
+
+    /**
+     * Marks the i-th button with mark ("O" or "X")
+     * @param the i-th button
+     * @param a mark ( "O" or "X" )
+     * @param true if it has been marked in success
+     */
+    private boolean markButton( int i, String mark ) {
+	if ( button[i].getText( ).equals( "" ) ) {
+	    button[i].setText( mark );
+	    button[i].setEnabled( false );
+	    return true;
+	}
+	return false;
+    }
+
+    /**
+     * Checks which button has been clicked
+     * @param an event passed from AWT 
+     * @return an integer (0 through to 8) that shows which button has been 
+     *         clicked. -1 upon an error. 
+     */
+    private int whichButtonClicked( ActionEvent event ) {
+	for ( int i = 0; i < NBUTTONS; i++ ) {
+	    if ( event.getSource( ) == button[i] )
+		return i;
+	}
+	return -1;
+    }
+
+    /**
+     * Checks if the i-th button has been marked with mark( "O" or "X" ).
+     * @param the i-th button
+     * @param a mark ( "O" or "X" )
+     * @return true if the i-th button has been marked with mark.
+     */
+    private boolean buttonMarkedWith( int i, String mark ) {
+	return button[i].getText( ).equals( mark );
+    }
+
+    /**
+     * Pops out another small window indicating that mark("O" or "X") won!
+     * @param a mark ( "O" or "X" )
+     */
+    private void showWon( String mark ) {
+	JOptionPane.showMessageDialog( null, mark + " won!" );	
+    }
+
+    /**
+     * Is called by AWT whenever any button has been clicked. You have to:
+     * <ol>
+     * <li> check if it is my turn,
+     * <li> check which button was clicked with whichButtonClicked( event ),
+     * <li> mark the corresponding button with markButton( buttonId, mark ),
+     * <li> send this informatioin to my counterpart,
+     * <li> checks if the game was completed with 
+     *      buttonMarkedWith( buttonId, mark ) 
+     * <li> shows a winning message with showWon( )
+     */
+    public  void actionPerformed( ActionEvent event ) {
+	System.out.println("Button clicked " + myTurn[0]);
+	// IMPLEMENT BY YOURSELF
+	if(!myTurn[0]){
+	    System.out.println("Not MY Turn");
+	    return;
+	}
+	synchronized(myTurn){
+	System.out.println("this action performed my turn" +this);
+        while (!myTurn[0]) {
+            try {
+                myTurn.wait();
+            } catch (Exception e) {
+                // Handle InterruptedException appropriately
+                error(e);
+            }
+        }
+
+        //System.out.println("It's " + myMark + "'s turn");
+        int buttonIndex = whichButtonClicked(event);
+        boolean isButtonMarked = markButton(buttonIndex, myMark);
+	// System.out.println(isButtonMarked + " isButtonMarked");
+	
+	
+        try {
+            output.writeObject(buttonIndex);
+            System.out.println("Object written");
+        } catch (Exception e) {
+            // Handle IOException appropriately
+            error(e);
+        }
+
+        if (checkForWin(myMark)) {
+            showWon(myMark);
+        }
+
+        myTurn[0] = false;
+        myTurn.notifyAll();
+	}
+
+ 
+   }
+
+    /**
+     * This is a reader thread that keeps reading fomr and behaving as my
+     * counterpart.
+     */
+    private class Counterpart extends Thread {
+
+	/**
+	 * Is the body of the Counterpart thread.
+	 */
+        @Override
+        public void run( ) {
+	     while(true){
+		System.out.println("In run method");
+		synchronized(myTurn){
+		    while (myTurn[0]) {
+			try {
+			    System.out.println("Its wait state");
+			    myTurn.wait();
+			    
+			} catch (Exception e) {
+			    error(e);
+			}
+		    }
+		    System.out.println("Its execution state");
+		    try{
+			System.out.println("Its buttonIndex");
+			int buttonIndex = (int)input.readObject();
+			boolean isButtonMarked = markButton(buttonIndex,yourMark);
+			System.out.println("Its buttonIndex" +buttonIndex);
+			if(checkForWin(yourMark)){
+			    showWon(yourMark);
+			}
+			System.out.println("Its "+yourMark + " turn");
+			myTurn[0]= true;
+			myTurn.notifyAll();
+		  
+		    }catch(Exception e){
+			System.out.println("Its Exception");
+			error(e);
+		    }
+		}
+	    }
+	}
+	
+    }
+
+    private boolean checkForWin(String mark){
+	int[][] winCombinations = {{0,1,2},{3,4,5},{6,7,8},{0,3,6},{1,4,7},{2,5,8},{2,4,6},{0,4,8}};
+
+	for(int[] combination : winCombinations){
+	    if(buttonMarkedWith(combination[0],mark) && buttonMarkedWith(combination[1],mark) && buttonMarkedWith(combination[2],mark)){
+		return true;
+	    }
+	    
+	}
+	return false;
+    }
+}
